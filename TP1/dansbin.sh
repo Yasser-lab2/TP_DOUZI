@@ -6,7 +6,7 @@ cmd=$1
 ls "/bin/$cmd" > /dev/null 2>&1
 
 # $? contient le code de retour de la dernière commande (ls)
-if [ $? -eq 0 ]; then
+if [[ $? -eq 0 ]]; then
     echo "0"  # La commande existe
 else
     echo "2" # La commande n'existe pas

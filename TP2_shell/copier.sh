@@ -1,4 +1,4 @@
-
+#!/bin/bash
 if [[ !( $# -eq 2)]]
 then echo le nombre d\'argument n\'est pas correct
 elif [[ !( -e $1) && !( -r $1 ) ]]
