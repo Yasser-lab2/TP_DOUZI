@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# Demande à l'utilisateur de saisir la phrase sans retour à la ligne (-n)
+echo -n "Entrez une suite de mots : "
+
+# Lit l'entrée clavier et sépare automatiquement les mots dans des variables
+# mot1 prend le 1er mot, mot2 le 2ème, mot3 le 3ème, et 'reste' prend tout ce qui suit.
+read mot1 mot2 mot3 reste
+
+# Affiche le premier et le troisième mot
+echo "$mot1 $mot3"

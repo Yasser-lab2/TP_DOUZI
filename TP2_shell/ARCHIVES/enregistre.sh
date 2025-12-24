@@ -1,0 +1,1 @@
+cat | tee tmp | wc -l
