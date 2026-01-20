@@ -31,7 +31,7 @@ int main(){
     }
     else{
         cpid = pid;
-        sleep(1); // Let child start first
+        // sleep(10); // Let child start first
         for(int i = 2; i <= 100; i += 2){
             pause(); // Wait for child signal
             printf("%d ", i);

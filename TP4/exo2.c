@@ -1,75 +1,88 @@
-#include<stdio.h>
-#include<stdlib.h>
-#include<unistd.h>
-#include<string.h>
-#include<sys/wait.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>
 
-int main(){
-    int fd1[2], fd2[2];
-    int count = 0;
-    char line[256];
-    
-    // Create pipes
-    if(pipe(fd1) == -1 || pipe(fd2) == -1){
-        perror("pipe");
+int main() {
+    int pipe1[2]; // Tube entre ps et grep
+    int pipe2[2]; // Tube entre grep et wc
+
+    // 1. Création du premier tube
+    if (pipe(pipe1) == -1) {
+        perror("Erreur pipe1");
         exit(1);
     }
-    
-    // First child: ps -aux
-    int pid1 = fork();
-    if(pid1 == -1){
-        perror("fork");
+
+    // --- Processus 1 : ps -uax ---
+    if (fork() == 0) {
+        // Dans le fils 1
+        
+        // On redirige la sortie standard (stdout) vers l'entrée du tube 1
+        dup2(pipe1[1], STDOUT_FILENO);
+        
+        // On ferme les descripteurs inutiles
+        close(pipe1[0]); // On ne lit pas
+        close(pipe1[1]); // Déjà dupliqué sur stdout
+        
+        // Exécution de la commande
+        execlp("ps", "ps", "-uax", NULL);
+        perror("Erreur exec ps"); // Ne s'exécute qu'en cas d'erreur
         exit(1);
     }
-    
-    if(pid1 == 0){
-        close(fd1[0]); // Close read end
-        dup2(fd1[1], STDOUT_FILENO); // Redirect stdout to pipe
-        close(fd1[1]);
-        execlp("ps", "ps", "-aux", NULL);
-        perror("execlp ps");
+
+    // 2. Création du deuxième tube
+    if (pipe(pipe2) == -1) {
+        perror("Erreur pipe2");
         exit(1);
     }
-    
-    // Second child: grep root
-    int pid2 = fork();
-    if(pid2 == -1){
-        perror("fork");
-        exit(1);
-    }
-    
-    if(pid2 == 0){
-        close(fd1[1]); // Close write end
-        close(fd2[0]); // Close read end
-        dup2(fd1[0], STDIN_FILENO); // Redirect stdin from pipe1
-        dup2(fd2[1], STDOUT_FILENO); // Redirect stdout to pipe2
-        close(fd1[0]);
-        close(fd2[1]);
+
+    // --- Processus 2 : grep root ---
+    if (fork() == 0) {
+        // Dans le fils 2
+        
+        // Entrée : on lit depuis la sortie du tube 1
+        dup2(pipe1[0], STDIN_FILENO);
+        // Sortie : on écrit dans l'entrée du tube 2
+        dup2(pipe2[1], STDOUT_FILENO);
+        
+        close(pipe1[0]); close(pipe1[1]);
+        close(pipe2[0]); close(pipe2[1]);
+        
         execlp("grep", "grep", "root", NULL);
-        perror("execlp grep");
+        perror("Erreur exec grep");
         exit(1);
     }
-    
-    // Parent: count lines from grep output
-    close(fd1[0]);
-    close(fd1[1]);
-    close(fd2[1]); // Close write end
-    
-    FILE *fp = fdopen(fd2[0], "r");
-    if(fp == NULL){
-        perror("fdopen");
+
+    // IMPORTANT : Le père a fini de créer les processus qui utilisent pipe1.
+    // Il doit fermer ses propres accès à pipe1, sinon grep ne recevra jamais le signal EOF (Fin de fichier)
+    close(pipe1[0]);
+    close(pipe1[1]);
+
+    // --- Processus 3 : wc -l ---
+    if (fork() == 0) {
+        // Dans le fils 3
+        
+        // Entrée : on lit depuis la sortie du tube 2
+        dup2(pipe2[0], STDIN_FILENO);
+        
+        // Sortie : on laisse la sortie standard (écran) par défaut
+        
+        close(pipe2[0]);
+        close(pipe2[1]);
+        
+        execlp("wc", "wc", "-l", NULL);
+        perror("Erreur exec wc");
         exit(1);
     }
-    
-    while(fgets(line, sizeof(line), fp) != NULL){
-        count++;
-    }
-    
-    fclose(fp);
+
+    // Le père ferme les restes du pipe2
+    close(pipe2[0]);
+    close(pipe2[1]);
+
+    // Le père attend la fin des 3 processus fils pour éviter les processus zombies
     wait(NULL);
     wait(NULL);
-    
-    printf("%d\n", count);
-    
+    wait(NULL);
+
     return 0;
 }
